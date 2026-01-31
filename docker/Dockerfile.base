@@ -252,10 +252,10 @@ RUN yes '' | ./configure
 
 # Build TensorFlow with memory-constrained settings for CI
 # Using low parallelism to avoid OOM on GitHub Actions (7GB RAM)
-# Note: TensorFlow 2.20+ changed build targets:
-#   - C API: //tensorflow:tensorflow (generates libtensorflow.so)
-#   - C++ API: //tensorflow:tensorflow_cc (generates libtensorflow_cc.so)
-#   - Framework: //tensorflow:tensorflow_framework (generates libtensorflow_framework.so)
+# Note: TensorFlow 2.20+ build targets:
+#   - C++ API: //tensorflow:tensorflow_cc (generates libtensorflow_cc.so, includes framework)
+#   - Headers: //tensorflow:install_headers
+# Enabled: --config=mkl for oneDNN/MKL acceleration on x86_64 CPUs
 RUN echo "Starting TensorFlow build with BUILD_JOBS=${BUILD_JOBS}..." && \
     bazelisk build \
         --jobs=${BUILD_JOBS} \
@@ -263,6 +263,7 @@ RUN echo "Starting TensorFlow build with BUILD_JOBS=${BUILD_JOBS}..." && \
         --local_cpu_resources=2 \
         --compilation_mode=opt \
         --config=monolithic \
+        --config=mkl \
         --config=nogcp \
         --config=nonccl \
         --copt=-fpermissive \
@@ -270,21 +271,21 @@ RUN echo "Starting TensorFlow build with BUILD_JOBS=${BUILD_JOBS}..." && \
         --copt=-Wno-c23-extensions \
         --conlyopt=-Wno-c23-extensions \
         --verbose_failures \
-        //tensorflow:tensorflow \
         //tensorflow:tensorflow_cc \
         //tensorflow:install_headers
 
 # Install TensorFlow libraries
-# The version number is extracted dynamically from the built files
 RUN mkdir -p ${HOME}/.local/lib/libtensorflow/lib && \
     mkdir -p ${HOME}/.local/lib/libtensorflow/include && \
-    cp bazel-bin/tensorflow/libtensorflow.so* ${HOME}/.local/lib/libtensorflow/lib/ && \
-    cp bazel-bin/tensorflow/libtensorflow_cc.so* ${HOME}/.local/lib/libtensorflow/lib/ && \
-    cp bazel-bin/tensorflow/libtensorflow_framework.so* ${HOME}/.local/lib/libtensorflow/lib/ && \
+    find bazel-bin/tensorflow -maxdepth 1 -name "libtensorflow*.so*" -exec cp {} ${HOME}/.local/lib/libtensorflow/lib/ \; && \
     cd ${HOME}/.local/lib/libtensorflow/lib && \
-    ln -sf libtensorflow.so.2 libtensorflow.so && \
-    ln -sf libtensorflow_cc.so.2 libtensorflow_cc.so && \
-    ln -sf libtensorflow_framework.so.2 libtensorflow_framework.so
+    for f in libtensorflow_cc.so.2.* libtensorflow_framework.so.2.*; do \
+        if [ -f "$f" ]; then \
+            base="${f%.2.*}"; \
+            ln -sf "$f" "${base}.2"; \
+            ln -sf "${base}.2" "${base}"; \
+        fi; \
+    done
 
 # Copy headers from install_headers target
 RUN cp -r bazel-bin/tensorflow/include/* ${HOME}/.local/lib/libtensorflow/include/ || true && \
