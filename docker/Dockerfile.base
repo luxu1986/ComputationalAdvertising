@@ -251,6 +251,14 @@ RUN mv ${HOME}/.local/downloads/tensorflow ${HOME}/.local/build/tensorflow
 
 WORKDIR ${HOME}/.local/build/tensorflow
 
+# Disable pywrap rules to enable tensorflow_cc shared library target
+# Default .bazelrc has: build --repo_env=USE_PYWRAP_RULES=True
+# This causes tf_cc_shared_library macro to skip creating the actual .so file
+# IMPORTANT: Must DELETE the line, not change to "False", because bool("False") == True in Python!
+RUN sed -i '/USE_PYWRAP_RULES/d' .bazelrc && \
+    echo "=== Verifying USE_PYWRAP_RULES removed ===" && \
+    grep -n "USE_PYWRAP_RULES" .bazelrc || echo "USE_PYWRAP_RULES line successfully removed"
+
 RUN yes '' | ./configure
 
 # Build TensorFlow with memory-constrained settings for CI
@@ -269,7 +277,6 @@ RUN echo "Starting TensorFlow build with BUILD_JOBS=${BUILD_JOBS}..." && \
         --config=mkl \
         --config=nogcp \
         --config=nonccl \
-        --repo_env=USE_PYWRAP_RULES=False \
         --copt=-fpermissive \
         --copt=-Wno-error \
         --copt=-Wno-c23-extensions \
