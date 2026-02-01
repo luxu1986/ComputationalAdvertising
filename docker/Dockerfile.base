@@ -116,15 +116,18 @@ RUN echo "Cloning TensorFlow ${TENSORFLOW_VERSION}..." && \
 RUN echo "Cloning ONNX Runtime ${ONNXRUNTIME_VERSION}..." && \
     git clone --branch v${ONNXRUNTIME_VERSION} --recursive https://github.com/microsoft/onnxruntime.git
 
-# Install Clang
-ARG LLVM_MAJOR=21
-RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_MAJOR} main" > /etc/apt/sources.list.d/llvm.list && \
-    apt-get update && apt-get install -y clang-${LLVM_MAJOR} lld-${LLVM_MAJOR} && rm -rf /var/lib/apt/lists/* && \
-    ln -sf /usr/bin/clang-${LLVM_MAJOR} /usr/bin/clang && \
-    ln -sf /usr/bin/clang++-${LLVM_MAJOR} /usr/bin/clang++ && \
-    ln -sf /usr/bin/lld-${LLVM_MAJOR} /usr/bin/lld && \
-    ln -sf /usr/bin/ld.lld-${LLVM_MAJOR} /usr/bin/ld.lld
+# Install Clang from official LLVM releases
+RUN curl -fsSL https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz \
+    -o /tmp/clang-llvm.tar.xz && \
+    mkdir -p /usr/local/llvm && \
+    tar -xf /tmp/clang-llvm.tar.xz -C /usr/local/llvm --strip-components=1 && \
+    rm /tmp/clang-llvm.tar.xz && \
+    ln -sf /usr/local/llvm/bin/clang /usr/bin/clang && \
+    ln -sf /usr/local/llvm/bin/clang++ /usr/bin/clang++ && \
+    ln -sf /usr/local/llvm/bin/lld /usr/bin/lld && \
+    ln -sf /usr/local/llvm/bin/ld.lld /usr/bin/ld.lld && \
+    ln -sf /usr/local/llvm/bin/clang-format /usr/bin/clang-format && \
+    ln -sf /usr/local/llvm/bin/clang-tidy /usr/bin/clang-tidy
 
 # Install Bazelisk
 RUN curl -fsSL https://github.com/bazelbuild/bazelisk/releases/download/v${BAZELISK_VERSION}/bazelisk-linux-amd64 \
@@ -140,7 +143,7 @@ ENV TF_NEED_OPENCL_SYCL=0
 ENV TF_NEED_MPI=0
 ENV TF_SET_ANDROID_WORKSPACE=0
 ENV CC_OPT_FLAGS="-march=native"
-ENV CLANG_COMPILER_PATH=/usr/bin/clang
+ENV CLANG_COMPILER_PATH=/usr/local/llvm/bin/clang
 
 RUN yes '' | ./configure
 
